@@ -128,6 +128,48 @@ func (tx *Tx) get(bucket string, key []byte) (value []byte, err error) {
 	}
 }
 
+func (tx *Tx) Exist(bucket string, key []byte) bool {
+	if err := tx.checkTxIsClosed(); err != nil {
+		return false
+	}
+
+	b, err := tx.db.bm.GetBucket(DataStructureBTree, bucket)
+	if err != nil {
+		return false
+	}
+	bucketId := b.Id
+
+	bucketStatus := tx.getBucketStatus(DataStructureBTree, bucket)
+	if bucketStatus == BucketStatusDeleted {
+		return false
+	}
+
+	status, entry := tx.findEntryAndItsStatus(DataStructureBTree, bucket, string(key))
+	if status != NotFoundEntry && entry != nil {
+		if status == EntryDeleted {
+			return false
+		} else {
+			return true
+		}
+	}
+
+	if idx, ok := tx.db.Index.bTree.exist(bucketId); ok {
+		record, found := idx.Find(key)
+		if !found {
+			return false
+		}
+
+		if record.IsExpired() {
+			tx.putDeleteLog(bucketId, key, nil, Persistent, DataDeleteFlag, uint64(time.Now().Unix()), DataStructureBTree)
+			return false
+		}
+		return true
+
+	} else {
+		return false
+	}
+}
+
 func (tx *Tx) ValueLen(bucket string, key []byte) (int, error) {
 	value, err := tx.get(bucket, key)
 	return len(value), err
