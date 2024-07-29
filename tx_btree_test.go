@@ -77,6 +77,57 @@ func TestTx_PutAndGet(t *testing.T) {
 
 }
 
+func TestTx_Exist(t *testing.T) {
+
+	var (
+		bucket = "bucket1"
+		key    = []byte("key1")
+		val    = []byte("val1")
+	)
+
+	t.Run("exist key", func(t *testing.T) {
+
+		withDefaultDB(t, func(t *testing.T, db *DB) {
+
+			{
+				txCreateBucket(t, db, DataStructureBTree, bucket, nil)
+
+				tx, err := db.Begin(true)
+				require.NoError(t, err)
+
+				err = tx.Put(bucket, key, val, Persistent)
+				assert.NoError(t, err)
+
+				assert.NoError(t, tx.Commit())
+			}
+
+			{
+				tx, err = db.Begin(false)
+				require.NoError(t, err)
+
+				exist := tx.Exist(bucket, key)
+				assert.NoError(t, err)
+				assert.NoError(t, tx.Commit())
+
+				assert.Equal(t, true, exist)
+			}
+
+		})
+	})
+
+	t.Run("exist by closed tx", func(t *testing.T) {
+		withDefaultDB(t, func(t *testing.T, db *DB) {
+			tx, err := db.Begin(false)
+			require.NoError(t, err)
+			assert.NoError(t, tx.Commit())
+
+			exist := tx.Exist(bucket, key) // use closed tx
+			assert.Equal(t, false, exist)
+		})
+	})
+
+}
+
 func TestTx_GetAll_GetKeys_GetValues(t *testing.T) {
 	bucket := "bucket"
 
